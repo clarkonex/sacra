@@ -1,389 +1,191 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-SACRA V2 - Mit vollständiger I-Ging Integration
+SACRA - Standalone Version
+Eine einzelne ausführbare Datei!
 
-Erweitert das SACRA-System um die komplette I-Ging Datenbank:
-- Hexagramm-Namen und Bedeutungen
-- Urteile und Bilder
-- Wandlungslinien
-- Tiefere semantische Interpretation
 """
 
-import sys
-import argparse
+import math, sys, argparse
 from datetime import datetime, timedelta
-from typing import Optional
+from decimal import Decimal, getcontext
 
-# Import SACRA-Module
-try:
-    from sacra_system import SacraSystem
-    from sacra_iching_integration import WandlungErweitert, IChingDatabase
-except ImportError as e:
-    print(f"FEHLER beim Import: {e}")
-    print("\nBitte stelle sicher, dass alle Module vorhanden sind:")
-    print("  - sacra_system.py")
-    print("  - sacra_iching_integration.py")
-    print("  - pi_pulse_integrated.py")
-    print("  - wandlung.py")
-    print("  - maya_kalender.py")
-    print("  - hex64_database_full.json")
-    sys.exit(1)
+# Hexagramm-Datenbank (gekürzt für Kompaktheit)
+HEX_DB = [
+    {"n": 1, "name": "Das Schöpferische", "j": "Das Schöpferische wirkt erhabenes Gelingen"},
+    {"n": 2, "name": "Das Empfangende", "j": "Das Empfangende wirkt erhabenes Gelingen"},
+    {"n": 3, "name": "Die Anfangsschwierigkeit", "j": "Die Anfangsschwierigkeit wirkt erhabenes Gelingen"},
+    {"n": 4, "name": "Die Jugendtorheit", "j": "Jugendtorheit hat Gelingen"},
+    {"n": 5, "name": "Das Warten", "j": "Das Warten. Wenn du wahrhaftig bist, so hast du Licht und Gelingen"},
+    {"n": 6, "name": "Der Streit", "j": "Der Streit: Du bist wahrhaftig und wirst gehemmt"},
+    {"n": 7, "name": "Das Heer", "j": "Das Heer braucht Beharrlichkeit"},
+    {"n": 8, "name": "Das Zusammenhalten", "j": "Zusammenhalten bringt Heil"},
+    {"n": 9, "name": "Des Kleinen Zähmungskraft", "j": "Des Kleinen Zähmungskraft hat Gelingen"},
+    {"n": 10, "name": "Das Auftreten", "j": "Auftreten. Auf den Schwanz des Tigers treten"},
+    {"n": 11, "name": "Der Friede", "j": "Der Friede. Das Kleine geht, das Große kommt. Heil!"},
+    {"n": 12, "name": "Die Stockung", "j": "Stockung durch schlechte Menschen"},
+    {"n": 13, "name": "Gemeinschaft mit Menschen", "j": "Gemeinschaft mit Menschen im Freien: Gelingen"},
+    {"n": 14, "name": "Der Besitz von Großem", "j": "Der Besitz von Großem: erhabenes Gelingen"},
+    {"n": 15, "name": "Die Bescheidenheit", "j": "Bescheidenheit schafft Gelingen"},
+    {"n": 16, "name": "Die Begeisterung", "j": "Die Begeisterung. Fördernd ist es"},
+    {"n": 17, "name": "Die Nachfolge", "j": "Die Nachfolge wirkt erhabenes Gelingen"},
+    {"n": 18, "name": "Die Arbeit am Verdorbenen", "j": "Die Arbeit am Verdorbenen hat erhabenes Gelingen"},
+    {"n": 19, "name": "Die Annäherung", "j": "Die Annäherung hat erhabenes Gelingen"},
+    {"n": 20, "name": "Die Betrachtung", "j": "Die Betrachtung. Die Abwaschung ist vollzogen"},
+    {"n": 21, "name": "Das Durchbeißen", "j": "Das Durchbeißen hat Gelingen"},
+    {"n": 22, "name": "Die Anmut", "j": "Die Anmut hat Gelingen"},
+    {"n": 23, "name": "Die Zersplitterung", "j": "Zersplitterung. Nicht fördernd ist es"},
+    {"n": 24, "name": "Die Wiederkehr", "j": "Die Wiederkehr. Gelingen"},
+    {"n": 25, "name": "Die Unschuld", "j": "Die Unschuld. Erhabenes Gelingen"},
+    {"n": 26, "name": "Des Großen Zähmungskraft", "j": "Des Großen Zähmungskraft. Beharrlichkeit fördernd"},
+    {"n": 27, "name": "Die Ernährung", "j": "Die Ernährung. Beharrlichkeit bringt Heil"},
+    {"n": 28, "name": "Des Großen Übergewicht", "j": "Des Großen Übergewicht. Der Firstbalken biegt sich durch"},
+    {"n": 29, "name": "Das Abgründige", "j": "Das Abgründige, wiederholt"},
+    {"n": 30, "name": "Das Haftende", "j": "Das Haftende. Beharrlichkeit ist fördernd"},
+    {"n": 31, "name": "Die Einwirkung", "j": "Die Einwirkung. Gelingen"},
+    {"n": 32, "name": "Die Dauer", "j": "Die Dauer. Gelingen. Kein Makel"},
+    {"n": 33, "name": "Der Rückzug", "j": "Der Rückzug. Gelingen"},
+    {"n": 34, "name": "Des Großen Macht", "j": "Des Großen Macht. Beharrlichkeit ist fördernd"},
+    {"n": 35, "name": "Der Fortschritt", "j": "Der Fortschritt. Der mächtige Fürst"},
+    {"n": 36, "name": "Die Verfinsterung des Lichts", "j": "Die Verfinsterung des Lichts"},
+    {"n": 37, "name": "Die Sippe", "j": "Die Sippe. Beharrlichkeit der Frau ist fördernd"},
+    {"n": 38, "name": "Der Gegensatz", "j": "Der Gegensatz. In kleinen Dingen Gelingen"},
+    {"n": 39, "name": "Das Hemmnis", "j": "Das Hemmnis. Fördernd ist der Südwesten"},
+    {"n": 40, "name": "Die Befreiung", "j": "Die Befreiung. Fördernd ist der Südwesten"},
+    {"n": 41, "name": "Die Minderung", "j": "Die Minderung mit Wahrhaftigkeit bringt erhabenes Heil"},
+    {"n": 42, "name": "Die Mehrung", "j": "Die Mehrung. Fördernd ist es, etwas zu unternehmen"},
+    {"n": 43, "name": "Der Durchbruch", "j": "Der Durchbruch. Man muss die Sache am Hof des Königs wahrhaftig kundtun"},
+    {"n": 44, "name": "Das Entgegenkommen", "j": "Das Entgegenkommen. Das Weib ist mächtig"},
+    {"n": 45, "name": "Die Sammlung", "j": "Die Sammlung. Gelingen"},
+    {"n": 46, "name": "Das Empordringen", "j": "Das Empordringen hat erhabenes Gelingen"},
+    {"n": 47, "name": "Die Bedrängnis", "j": "Die Bedrängnis. Gelingen. Beharrlichkeit"},
+    {"n": 48, "name": "Der Brunnen", "j": "Der Brunnen. Man kann die Stadt wechseln"},
+    {"n": 49, "name": "Die Umwälzung", "j": "Die Umwälzung. An deinem eigenen Tage wirst du geglaubt"},
+    {"n": 50, "name": "Der Tiegel", "j": "Der Tiegel. Erhabenes Heil. Gelingen"},
+    {"n": 51, "name": "Das Erregende", "j": "Das Erregende bringt Gelingen"},
+    {"n": 52, "name": "Das Stillehalten", "j": "Stillehalten seines Rückens"},
+    {"n": 53, "name": "Die Entwicklung", "j": "Die Entwicklung. Das Mädchen wird verheiratet. Heil!"},
+    {"n": 54, "name": "Das heiratende Mädchen", "j": "Das heiratende Mädchen. Unternehmungen bringen Unheil"},
+    {"n": 55, "name": "Die Fülle", "j": "Die Fülle hat Gelingen"},
+    {"n": 56, "name": "Der Wanderer", "j": "Der Wanderer. Gelingen im Kleinen"},
+    {"n": 57, "name": "Das Sanfte", "j": "Das Sanfte. Gelingen im Kleinen"},
+    {"n": 58, "name": "Das Heitere", "j": "Das Heitere. Gelingen"},
+    {"n": 59, "name": "Die Auflösung", "j": "Die Auflösung. Gelingen"},
+    {"n": 60, "name": "Die Beschränkung", "j": "Beschränkung. Gelingen"},
+    {"n": 61, "name": "Innere Wahrheit", "j": "Innere Wahrheit. Schweine und Fische. Heil!"},
+    {"n": 62, "name": "Des Kleinen Übergewicht", "j": "Des Kleinen Übergewicht. Gelingen"},
+    {"n": 63, "name": "Nach der Vollendung", "j": "Gelingen im Kleinen. Fördernd ist Beharrlichkeit"},
+    {"n": 64, "name": "Vor der Vollendung", "j": "Vor der Vollendung. Gelingen"}
+]
 
+TRIG = {0:"☷",1:"☶",2:"☵",3:"☴",4:"☳",5:"☲",6:"☱",7:"☰"}
+TRIG_N = ["Erde","Berg","Wasser","Wind","Donner","Feuer","See","Himmel"]
+TZ_T = ["Imix","Ik","Akbal","Kan","Chicchan","Cimi","Manik","Lamat","Muluc","Oc","Chuen","Eb","Ben","Ix","Men","Cib","Caban","Etznab","Cauac","Ahau"]
+HB_M = ["Pop","Wo","Sip","Sotz","Sek","Xul","Yaxkin","Mol","Chen","Yax","Sak","Keh","Mak","Kankin","Muan","Pax","Kayab","Kumku","Wayeb"]
 
-class SacraV2(SacraSystem):
-    """
-    Erweiterte SACRA-Version mit vollständiger I-Ging Integration.
-    """
-    
-    def __init__(self):
-        """Initialisiert SACRA V2 mit I-Ging Datenbank."""
-        super().__init__()
-        
-        # Ersetze Wandlung durch erweiterte Version
-        try:
-            self.wandlung = WandlungErweitert()
-            self.iching_db = self.wandlung.iching_db
-            self.iching_verfuegbar = True
-            print("✓ I-Ging Datenbank erfolgreich geladen")
-        except FileNotFoundError as e:
-            print(f"⚠ Warnung: I-Ging Datenbank nicht gefunden")
-            print(f"   {e}")
-            print("   Verwende Basis-Wandlung ohne erweiterte Texte")
-            self.iching_verfuegbar = False
-    
-    def berechne_sacra_punkt_v2(self, datum: Optional[datetime] = None) -> dict:
-        """
-        Berechnet erweiterten SACRA-Zustandspunkt mit I-Ging Informationen.
-        
-        Args:
-            datum: Datum für Berechnung (Standard: jetzt)
-            
-        Returns:
-            Dict mit allen SACRA-Daten inkl. I-Ging Details
-        """
-        # Basis SACRA-Berechnung
-        sacra_punkt = self.berechne_sacra_punkt(datum)
-        
-        # Erweitere mit I-Ging Informationen wenn verfügbar
-        if self.iching_verfuegbar:
-            hex_vollstaendig = self.wandlung.berechne_hexagramm_vollstaendig(datum)
-            interpretation = self.wandlung.interpretiere_moment(datum)
-            
-            # Integriere I-Ging Daten
-            sacra_punkt['wandlung_erweitert'] = {
-                'name': hex_vollstaendig['name'],
-                'urteil': hex_vollstaendig['urteil'],
-                'struktur': hex_vollstaendig['struktur'],
-                'aktive_linie': hex_vollstaendig['aktive_linie'],
-                'gewandelt': hex_vollstaendig['wandlung'],
-                'beziehungen': hex_vollstaendig['beziehungen']
-            }
-            
-            sacra_punkt['interpretation'] = interpretation
-            
-            # Erweitere Qualitätsbewertung
-            sacra_punkt['qualitaet']['iching_qualitaet'] = self._bewerte_iching_qualitaet(
-                hex_vollstaendig, interpretation
-            )
-        
-        return sacra_punkt
-    
-    def _bewerte_iching_qualitaet(self, hex_data: dict, interp: dict) -> dict:
-        """
-        Bewertet die I-Ging Qualität eines Moments.
-        
-        Args:
-            hex_data: Hexagramm-Daten
-            interp: Interpretation
-            
-        Returns:
-            Dict mit I-Ging spezifischer Qualitätsbewertung
-        """
-        urteil = hex_data['urteil'].lower()
-        
-        # Positiv-Indikatoren
-        positiv_woerter = ['gelingen', 'heil', 'fördernd', 'erfolg', 'glück']
-        negativ_woerter = ['unheil', 'gefahr', 'unheil', 'schaden', 'makel']
-        
-        positiv_score = sum(2 for wort in positiv_woerter if wort in urteil)
-        negativ_score = sum(2 for wort in negativ_woerter if wort in urteil)
-        
-        # Balance-Bewertung
-        balance = hex_data['struktur']['balance']
-        balance_score = (6 - balance) * 2  # Besser je ausgeglichener
-        
-        # Gesamt-Score (0-100)
-        gesamt = min(100, max(0, (positiv_score * 10 + balance_score * 5 - negativ_score * 10)))
-        
-        # Qualitätsstufe
-        if gesamt >= 70:
-            stufe = "GÜNSTIG"
-        elif gesamt >= 50:
-            stufe = "NEUTRAL"
-        elif gesamt >= 30:
-            stufe = "HERAUSFORDERND"
-        else:
-            stufe = "SCHWIERIG"
-        
-        return {
-            'score': gesamt,
-            'stufe': stufe,
-            'zeitqualitaet': interp['zeitqualitaet'],
-            'energie_qualitaet': interp['energie_qualitaet']
-        }
-    
-    def zeige_sacra_v2_zustand(self, sacra_punkt: dict, detailliert: bool = True):
-        """
-        Zeigt erweiterten SACRA-Zustand mit I-Ging Informationen.
-        
-        Args:
-            sacra_punkt: SACRA V2 Zustandspunkt
-            detailliert: Vollständige oder kompakte Ausgabe
-        """
-        print(f"\n{'═'*80}")
-        print(f"{'SACRA V2 - MIT I-GING INTEGRATION':^80}")
-        print(f"{'═'*80}")
-        
-        datum = sacra_punkt['datum']
-        print(f"\n⏰ ZEITPUNKT: {datum.strftime('%d.%m.%Y %H:%M:%S')}")
-        print(f"🔐 SIGNATUR: {sacra_punkt['sacra_signatur']}")
-        
-        # Qualität
-        qual = sacra_punkt['qualitaet']
-        print(f"\n{'─'*80}")
-        print(f"✨ SACRA-QUALITÄT: {qual['qualitaet']} ({qual['score']:.1f}/100)")
-        print(f"   {qual['beschreibung']}")
-        
-        # I-Ging Qualität wenn verfügbar
-        if 'iching_qualitaet' in qual:
-            iching_qual = qual['iching_qualitaet']
-            print(f"\n🔯 I-GING QUALITÄT: {iching_qual['stufe']} ({iching_qual['score']:.1f}/100)")
-            print(f"   Zeitqualität: {iching_qual['zeitqualitaet']}")
-            print(f"   Energie: {iching_qual['energie_qualitaet']}")
-        
-        if detailliert and 'wandlung_erweitert' in sacra_punkt:
-            wdl_ext = sacra_punkt['wandlung_erweitert']
-            
-            # Hexagramm mit Namen
-            print(f"\n{'─'*80}")
-            print(f"🔄 I-GING HEXAGRAMM")
-            print(f"{'─'*80}")
-            print(f"Nr. {sacra_punkt['wandlung']['hexagramm_nummer']}: {wdl_ext['name']}")
-            print(f"  Oben:  {sacra_punkt['wandlung']['trigramm_oben']['symbol']} "
-                  f"{sacra_punkt['wandlung']['trigramm_oben']['name']}")
-            print(f"  Unten: {sacra_punkt['wandlung']['trigramm_unten']['symbol']} "
-                  f"{sacra_punkt['wandlung']['trigramm_unten']['name']}")
-            
-            # Struktur
-            struktur = wdl_ext['struktur']
-            print(f"\n   Struktur: {struktur['yang_linien']} Yang, {struktur['yin_linien']} Yin")
-            balance_viz = "●" * (6 - struktur['balance']) + "○" * struktur['balance']
-            print(f"   Balance:  {balance_viz}")
-            
-            # Essenz aus Urteil
-            urteil_lines = wdl_ext['urteil'].split('\n')
-            essenz = urteil_lines[0].strip() if urteil_lines else ""
-            if essenz:
-                print(f"\n   📜 Essenz: {essenz}")
-            
-            # Aktive Wandlungslinie
-            if wdl_ext['aktive_linie']['daten']:
-                linie = wdl_ext['aktive_linie']
-                print(f"\n   ⚡ Aktive Linie {linie['position']}: {linie['daten']['title']}")
-                linie_text = linie['daten']['text'].replace('\n', ' ').strip()
-                if len(linie_text) > 100:
-                    linie_text = linie_text[:97] + "..."
-                print(f"      {linie_text}")
-            
-            # Wandlung
-            if wdl_ext['gewandelt']:
-                gewandelt = wdl_ext['gewandelt']
-                print(f"\n   🔄 Wandlung zu: Nr. {gewandelt['gewandeltes_hexagramm_nr']} - "
-                      f"{gewandelt['gewandeltes_hexagramm_name']}")
-            
-            # Beziehungen (kompakt)
-            bez = wdl_ext['beziehungen']
-            print(f"\n   🔗 Beziehungen:")
-            print(f"      Kern: {bez['kern']['name']}")
-        
-        # Interpretation
-        if 'interpretation' in sacra_punkt and detailliert:
-            interp = sacra_punkt['interpretation']
-            print(f"\n{'─'*80}")
-            print(f"💡 INTERPRETATION & EMPFEHLUNG")
-            print(f"{'─'*80}")
-            print(f"   {interp['handlungs_empfehlung']}")
-            
-            trans = interp['transformation']
-            print(f"\n   🔄 Transformation:")
-            print(f"      {trans['aktuell']} → {trans['wandlung_zu']}")
-        
-        # Pi-Pulse, Maya und Energie wie im Original
-        if detailliert:
-            pp = sacra_punkt['pi_pulse']
-            print(f"\n{'─'*80}")
-            print(f"🌀 PI-PULSE")
-            print(f"{'─'*80}")
-            print(f"   Ziffer: {pp['ziffer']}")
-            print(f"   Fibonacci-Radius: {pp['fibonacci_radius']:,}")
-            print(f"   Welle: {pp['welle_nummer']}/20, Position: {pp['position_in_welle']}/13")
-            
-            maya = sacra_punkt['maya']
-            print(f"\n{'─'*80}")
-            print(f"📅 MAYA-KALENDER")
-            print(f"{'─'*80}")
-            print(f"   Tzolkin: {maya['tzolkin']['nummer']} {maya['tzolkin']['tag']}")
-            print(f"   Haab: {maya['haab']['tag']} {maya['haab']['monat']}")
-            print(f"   Venus: {maya['venus']['phase']}")
-            
-            ef = sacra_punkt['energie_feld']
-            print(f"\n{'─'*80}")
-            print(f"⚡ ENERGIE-FELD")
-            print(f"{'─'*80}")
-            print(f"   Intensität: {ef['intensitaet']}")
-            print(f"   Modulierte Energie: {ef['modulierte_energie']:.1f}/100")
-        
-        print(f"\n{'═'*80}\n")
-    
-    def finde_guenstige_momente_v2(self, start: datetime, ende: datetime,
-                                   min_sacra_qualitaet: float = 70.0,
-                                   min_iching_qualitaet: float = 60.0,
-                                   max_ergebnisse: int = 10) -> list:
-        """
-        Findet günstige Momente basierend auf SACRA und I-Ging Qualität.
-        
-        Args:
-            start: Start-Datum
-            ende: End-Datum
-            min_sacra_qualitaet: Minimale SACRA-Qualität (0-100)
-            min_iching_qualitaet: Minimale I-Ging-Qualität (0-100)
-            max_ergebnisse: Maximale Anzahl Ergebnisse
-            
-        Returns:
-            Liste von günstigen SACRA-Momenten
-        """
-        tage = (ende - start).days
-        kandidaten = []
-        
-        print(f"Analysiere {tage} Tage...")
-        
-        for i in range(tage + 1):
-            if i % 10 == 0:
-                print(f"  {i}/{tage} Tage analysiert...", end='\r')
-            
-            aktuelles_datum = start + timedelta(days=i)
-            sacra_punkt = self.berechne_sacra_punkt_v2(aktuelles_datum)
-            
-            sacra_qual = sacra_punkt['qualitaet']['score']
-            
-            # Prüfe I-Ging Qualität wenn verfügbar
-            iching_qual = 0
-            if 'iching_qualitaet' in sacra_punkt['qualitaet']:
-                iching_qual = sacra_punkt['qualitaet']['iching_qualitaet']['score']
-            
-            # Beide Kriterien müssen erfüllt sein
-            if sacra_qual >= min_sacra_qualitaet and iching_qual >= min_iching_qualitaet:
-                kandidaten.append({
-                    'sacra_punkt': sacra_punkt,
-                    'gesamt_score': (sacra_qual + iching_qual) / 2
-                })
-        
-        print(f"  {tage}/{tage} Tage analysiert... Fertig!")
-        
-        # Sortiere nach Gesamt-Score
-        kandidaten.sort(key=lambda x: x['gesamt_score'], reverse=True)
-        
-        return [k['sacra_punkt'] for k in kandidaten[:max_ergebnisse]]
+def pi_calc(d=16):
+    getcontext().prec=max(d+50,100)
+    C=426880*Decimal(10005).sqrt()
+    K,M,X,L,S=Decimal(6),Decimal(1),Decimal(1),Decimal(13591409),Decimal(13591409)
+    for i in range(1,10):
+        M=M*(K**3-16*K)/((i)**3);K+=12;L+=545140134;X*=-262537412640768000;S+=Decimal(M*L)/X
+    p=str(C/S);return p.split('.')[1][:d] if '.' in p else "0"*d
 
+def fib(n):
+    if n<=0:return []
+    if n==1:return [0]
+    s=[0,1]
+    while len(s)<n:s.append(s[-1]+s[-2])
+    return s
 
-def main():
-    """Hauptfunktion mit Demonstrationen."""
-    parser = argparse.ArgumentParser(
-        description="SACRA V2 - Mit vollständiger I-Ging Integration"
-    )
-    parser.add_argument('-d', '--datum', type=str, metavar='YYYY-MM-DD',
-                       help='Analysiere spezifisches Datum')
-    parser.add_argument('-o', '--optimal', action='store_true',
-                       help='Finde optimale Momente im nächsten Monat')
-    parser.add_argument('--tage', type=int, default=30,
-                       help='Anzahl Tage für Suche (Standard: 30)')
-    parser.add_argument('-k', '--kompakt', action='store_true',
-                       help='Kompakte Ausgabe')
+def jd(d):
+    a=(14-d.month)//12;y=d.year+4800-a;m=d.month+12*a-3
+    return d.day+(153*m+2)//5+365*y+y//4-y//100+y//400-32045
+
+def maya(d):
+    j=jd(d);t=int(j-584283)
+    tn=((t+4)%13);tn=13 if tn==0 else tn
+    tt=TZ_T[(t+19)%20];hp=(t+348)%365
+    hm=HB_M[hp//20 if hp<360 else 18];ht=hp%20 if hp<360 else hp-360
+    vt=t%584;vp="Morgenstern" if vt<236 else "Obere Konjunktion" if vt<326 else "Abendstern" if vt<576 else "Untere Konjunktion"
+    return {'tz_n':tn,'tz_t':tt,'tz_p':(t%260)+1,'hb_t':ht,'hb_m':hm,'vp':vp}
+
+def hex_calc(d):
+    tu=(d.year%100+d.month+d.day+d.hour)%8
+    ra=math.degrees(math.atan2(math.sin(math.radians((d.timetuple().tm_yday-80)*360/365.25))*math.cos(math.radians(23.44)),math.cos(math.radians((d.timetuple().tm_yday-80)*360/365.25))))%360
+    to=(int(ra*12/360)+int((0+90)/30))%8
+    hv=(tu<<3)|to;hn=hv+1;hd=next((h for h in HEX_DB if h['n']==hn),{})
+    y=bin(hv).count('1');return {'hn':hn,'hv':hv,'name':hd.get('name','?'),'j':hd.get('j',''),'tu':tu,'to':to,'y':y,'yi':6-y}
+
+def qual(h):
+    j=h['j'].lower()
+    p=sum(10 for w in ['gelingen','heil','fördernd'] if w in j)
+    n=sum(10 for w in ['unheil','gefahr','makel'] if w in j)
+    b=(6-abs(h['y']-h['yi']))*10;s=min(100,max(0,p+b-n))
+    return {'s':s,'st':'GÜNSTIG' if s>=70 else 'NEUTRAL' if s>=50 else 'HERAUSFORDERND' if s>=30 else 'SCHWIERIG'}
+
+def sacra(d=None):
+    if d is None:d=datetime.now()
+    m=maya(d);tp=m['tz_p']-1
+    pd=pi_calc(260);pz=int(pd[min(tp,len(pd)-1)])
+    fs=fib(min(tp+1,93));fr=fs[tp] if tp<len(fs) else 0
+    h=hex_calc(d);iq=qual(h)
+    pe=(pz/9.0)*100;he=((h['tu']+h['to'])/14.0)*100
+    fm=math.log(fr+1)/math.log(1.618) if fr>0 else 0
+    e=((pe+he)/2.0)*(1+fm/10.0)
+    r=((pz+h['hv']+tp)%9)+1;ss=min(100,r*10+e*0.3)
+    sq='EXZELLENT' if ss>=80 else 'SEHR GUT' if ss>=65 else 'GUT' if ss>=50 else 'MODERAT' if ss>=35 else 'TRANSFORMATIV'
+    return {'d':d,'sig':f"P{pz}-H{h['hv']:02X}-T{tp:03d}",'ss':ss,'sq':sq,'iq':iq,'h':h,'pz':pz,'fr':fr,'tp':tp,'m':m,'e':e}
+
+def show(s,k=False):
+    print(f"\n{'═'*80}\nSACRA - {s['d'].strftime('%d.%m.%Y %H:%M:%S')}\n{'═'*80}")
+    print(f"🔐 {s['sig']}")
+    print(f"\n✨ SACRA: {s['sq']} ({s['ss']:.1f}/100)")
+    print(f"🔯 I-GING: {s['iq']['st']} ({s['iq']['s']:.1f}/100)")
+    print(f"\n🔄 HEXAGRAMM {s['h']['hn']}: {s['h']['name']}")
+    print(f"   {TRIG[s['h']['to']]} {TRIG_N[s['h']['to']]} / {TRIG[s['h']['tu']]} {TRIG_N[s['h']['tu']]}")
+    print(f"   Balance: {'●'*(6-abs(s['h']['y']-s['h']['yi']))}{'○'*abs(s['h']['y']-s['h']['yi'])}")
+    print(f"   {s['h']['j']}")
+    if not k:
+        print(f"\n🌀 PI: {s['pz']} | Fib: {s['fr']:,} | Pos: {s['tp']}/260")
+        print(f"📅 MAYA: {s['m']['tz_n']} {s['m']['tz_t']} | {s['m']['hb_t']} {s['m']['hb_m']} | {s['m']['vp']}")
+        print(f"⚡ ENERGIE: {s['e']:.1f}/100")
+    print(f"{'═'*80}\n")
+
+def week():
+    print(f"\n{'═'*80}\nWOCHEN-ÜBERSICHT\n{'═'*80}\n")
+    print(f"{'Tag':<12}|{'Datum':<12}|{'SACRA':<10}|{'I-Ging':<10}|{'Hex'}")
+    print('─'*80)
+    for i in range(7):
+        d=datetime.now()+timedelta(days=i)
+        s=sacra(d)
+        print(f"{'→' if i==0 else ' '} {d.strftime('%a'):<9}|{d.strftime('%d.%m.'):<12}|{s['ss']:3.0f}/100   |{s['iq']['s']:3.0f}/100   |{s['h']['name'][:20]}")
+    print('─'*80+'\n')
+
+def optimal(t=30):
+    print(f"\n{'═'*80}\nOPTIMALE MOMENTE ({t} Tage)\n{'═'*80}\n")
+    r=[]
+    for i in range(t):
+        s=sacra(datetime.now()+timedelta(days=i))
+        if s['ss']>=70 and s['iq']['s']>=60:r.append(s)
+    r.sort(key=lambda x:(x['ss']+x['iq']['s'])/2,reverse=True)
+    for i,s in enumerate(r[:5],1):
+        print(f"{i}. {s['d'].strftime('%d.%m.%Y %A')}")
+        print(f"   SACRA: {s['ss']:.0f} | I-Ging: {s['iq']['s']:.0f} | {s['h']['name']}\n")
+    if not r:print("Keine optimalen Momente gefunden.\n")
+    print('─'*80+'\n')
+
+if __name__=="__main__":
+    p=argparse.ArgumentParser(description="SACRA Standalone")
+    p.add_argument('-d','--datum',help='YYYY-MM-DD')
+    p.add_argument('-w','--woche',action='store_true',help='Woche')
+    p.add_argument('-o','--optimal',action='store_true',help='Optimal')
+    p.add_argument('-k','--kompakt',action='store_true',help='Kompakt')
+    p.add_argument('--tage',type=int,default=30,help='Tage für -o')
+    a=p.parse_args()
     
-    args = parser.parse_args()
-    
-    # Initialisiere SACRA V2
-    print("\n" + "="*80)
-    print("SACRA V2 - INITIALIZATION")
-    print("="*80 + "\n")
-    
-    sacra = SacraV2()
-    
-    if not sacra.iching_verfuegbar:
-        print("\n⚠  I-Ging Datenbank nicht verfügbar - Verwende Basis-Version")
-        print("   Für volle Funktionalität: hex64_database_full.json bereitstellen\n")
-    
-    # Parse Datum
-    datum = None
-    if args.datum:
-        try:
-            datum = datetime.strptime(args.datum, '%Y-%m-%d')
-        except ValueError:
-            print(f"FEHLER: Ungültiges Datumsformat. Verwende YYYY-MM-DD")
-            sys.exit(1)
-    
-    if args.optimal:
-        # Finde optimale Momente
-        print("\n" + "="*80)
-        print("SUCHE NACH OPTIMALEN MOMENTEN")
-        print("="*80 + "\n")
-        
-        heute = datetime.now()
-        ende = heute + timedelta(days=args.tage)
-        
-        optimale = sacra.finde_guenstige_momente_v2(
-            heute, ende,
-            min_sacra_qualitaet=70.0,
-            min_iching_qualitaet=60.0,
-            max_ergebnisse=5
-        )
-        
-        if optimale:
-            print(f"\n✨ {len(optimale)} optimale Momente gefunden:\n")
-            for idx, moment in enumerate(optimale, 1):
-                datum_str = moment['datum'].strftime('%d.%m.%Y %A')
-                sacra_qual = moment['qualitaet']['score']
-                signatur = moment['sacra_signatur']
-                
-                hex_name = "N/A"
-                if 'wandlung_erweitert' in moment:
-                    hex_name = moment['wandlung_erweitert']['name']
-                
-                print(f"{idx}. {datum_str}")
-                print(f"   Signatur: {signatur}")
-                print(f"   SACRA-Qualität: {sacra_qual:.1f}/100")
-                print(f"   Hexagramm: {hex_name}")
-                
-                if 'iching_qualitaet' in moment['qualitaet']:
-                    iching_qual = moment['qualitaet']['iching_qualitaet']
-                    print(f"   I-Ging: {iching_qual['stufe']} ({iching_qual['score']:.1f}/100)")
-                print()
-        else:
-            print("\n❌ Keine optimalen Momente gefunden.")
-    
+    if a.woche:week()
+    elif a.optimal:optimal(a.tage)
     else:
-        # Standard: Zeige aktuellen oder spezifischen Moment
-        if datum is None:
-            datum = datetime.now()
-        
-        print("\n" + "="*80)
-        print("SACRA V2 - MOMENT-ANALYSE")
-        print("="*80)
-        
-        sacra_punkt = sacra.berechne_sacra_punkt_v2(datum)
-        sacra.zeige_sacra_v2_zustand(sacra_punkt, detailliert=not args.kompakt)
-
-
-if __name__ == "__main__":
-    main()
+        d=datetime.strptime(a.datum,'%Y-%m-%d') if a.datum else None
+        show(sacra(d),a.kompakt)
